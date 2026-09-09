@@ -471,7 +471,14 @@ public class MobileScannerPlugin: NSObject, FlutterPlugin, FlutterStreamHandler,
         setupInterfaceOrientationObserver()
 #endif
 
-        DispatchQueue.global(qos: .background).async {
+        // `startRunning()` is what the user is waiting on when they open the
+        // scanner, so it must not run at `.background` QoS: that band is thread
+        // priority 4 (vs 37 for `.userInitiated`), is I/O throttled by the
+        // kernel, is deferred under thermal pressure and Low Power Mode, and
+        // propagates over XPC so mediaserverd services the request at the same
+        // low priority. On a busy main thread - an app cold start, for instance
+        // - that starves the session start for seconds.
+        DispatchQueue.global(qos: .userInitiated).async {
             self.captureSession!.startRunning()
 
             DispatchQueue.main.async {
